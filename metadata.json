@@ -1,0 +1,5 @@
+{
+  "name": "מערכת מבחני פייתון - כיתה ח",
+  "description": "An interactive Python programming exam platform for 8th grade students with timed sessions, randomized questions, and automatic submission.",
+  "requestFramePermissions": []
+}
