@@ -20,7 +20,7 @@ const FullscreenLock: React.FC<FullscreenLockProps> = ({ onReturn }) => {
         </h2>
         <p className="text-slate-600 text-xl mb-10 font-bold leading-relaxed">
           لقد خرجت من وضع ملء الشاشة. <br/>
-          <span className="text-rose-600">لا يمكن رؤية الأسئلة أو المتابعة</span> إلا بعد العودة للوضع المؤمن.
+          <span className="text-rose-600">لا ניתן رؤية الأسئلة أو المتابعة</span> إلا بعد العودة للوضع المؤمن.
         </p>
 
         <button

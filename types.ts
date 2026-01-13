@@ -11,10 +11,15 @@ export interface Question {
   type: QuestionType;
   title: string;
   instruction: string;
-  content?: string; // e.g., code snippet
+  content?: string;
   options?: string[];
   placeholder?: string;
   points: number;
+  correctAnswer?: string;
+  // Dynamic features
+  isDynamic?: boolean;
+  dynamicParams?: Record<string, any>;
+  signature?: string; // Unique hash for this specific instance
 }
 
 export interface StudentAnswers {
@@ -31,9 +36,15 @@ export interface ExamState {
   questions: Question[];
   currentQuestionIndex: number;
   answers: StudentAnswers;
+  hintsUsed: { [questionId: string]: string };
   startTime: number | null;
+  endTime: number | null;
   timeLeft: number;
   isFinished: boolean;
   studentInfo: StudentInfo | null;
-  fullscreenExits: number; // New field to track cheating attempts
+  fullscreenExits: number;
+  focusLosses: number;
+  aiFeedback: string;
+  isLocked: boolean;
+  examSignature?: string;
 }

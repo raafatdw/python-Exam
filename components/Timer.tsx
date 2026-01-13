@@ -14,10 +14,9 @@ interface TimerProps {
 }
 
 const Timer: React.FC<TimerProps> = ({ timeLeft, theme }) => {
-  const isUrgent = timeLeft < 300; // Less than 5 mins
-  const isCritical = timeLeft < 60; // Less than 1 min
+  const isUrgent = timeLeft < 300; 
+  const isCritical = timeLeft < 60; 
 
-  // Default color classes
   const defaultTheme: Required<TimerTheme> = {
     normal: 'bg-indigo-900',
     urgent: 'bg-amber-500',

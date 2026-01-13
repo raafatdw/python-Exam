@@ -1,118 +1,200 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import { RAW_QUESTIONS } from './questions';
-import { ExamState, StudentInfo } from './types';
-import { shuffleArray, saveToMockSheet } from './utils';
+import { ExamState, StudentInfo, Question } from './types';
+import { shuffleArray, saveToMockSheet, materializeQuestion, generateExamSignature } from './utils';
 import Timer, { TimerTheme } from './components/Timer';
 import StartPage from './components/StartPage';
 import QuestionCard from './components/QuestionCard';
 import SummaryPage from './components/SummaryPage';
 import LandingPage from './components/LandingPage';
 import FullscreenLock from './components/FullscreenLock';
+import Scratchpad from './components/Scratchpad';
+import Strikes from './components/Strikes';
 
-const EXAM_DURATION = 30 * 60; // 30 minutes in seconds
+const EXAM_DURATION = 30 * 60; 
+const MAX_STRIKES = 3;
 
 const EXAM_TIMER_THEME: TimerTheme = {
-  normal: 'bg-indigo-900',
+  normal: 'bg-indigo-900 dark:bg-indigo-950',
   urgent: 'bg-orange-500',
   critical: 'bg-rose-600',
 };
 
 const App: React.FC = () => {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('exam-theme') as 'light' | 'dark') || 'light';
+  });
+
   const [showLanding, setShowLanding] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isWindowFocused, setIsWindowFocused] = useState(true);
+  const [isScratchpadOpen, setIsScratchpadOpen] = useState(false);
+  const [hintLoading, setHintLoading] = useState(false);
+  const [showSecurityAlert, setShowSecurityAlert] = useState(false);
+
   const [state, setState] = useState<ExamState>({
     questions: [],
     currentQuestionIndex: -1,
     answers: {},
+    hintsUsed: {},
     startTime: null,
+    endTime: null,
     timeLeft: EXAM_DURATION,
     isFinished: false,
     studentInfo: null,
     fullscreenExits: 0,
+    focusLosses: 0,
+    aiFeedback: '',
+    isLocked: false,
+    examSignature: '',
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [showValidationError, setShowValidationError] = useState(false);
 
-  // Monitor Fullscreen status and track exits
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      const isNowFullscreen = !!document.fullscreenElement;
-      setIsFullscreen(isNowFullscreen);
+    if (state.currentQuestionIndex === -1 || state.isFinished) return;
+
+    const triggerSecurityAlert = () => {
+      setShowSecurityAlert(true);
+      setTimeout(() => setShowSecurityAlert(false), 3000);
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      triggerSecurityAlert();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.ctrlKey || e.metaKey;
+      const forbiddenKeys = ['c', 'v', 'x', 'a', 's', 'p'];
       
-      // If we are in the middle of an exam and user exits fullscreen, increment counter
-      if (!isNowFullscreen) {
-        setState(prev => {
-          if (prev.currentQuestionIndex >= 0 && !prev.isFinished) {
-            return { ...prev, fullscreenExits: prev.fullscreenExits + 1 };
-          }
-          return prev;
-        });
-      }
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  // Prevention of accidental page close and keyboard shortcuts
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (state.currentQuestionIndex >= 0 && !state.isFinished) {
+      if (isCmdOrCtrl && forbiddenKeys.includes(e.key.toLowerCase())) {
         e.preventDefault();
-        e.returnValue = 'هل أنت متأكد؟ سيتم فقدان تقدمك في الامتحان.'; 
+        triggerSecurityAlert();
       }
-    };
-
-    const preventDefaultShortcuts = (e: KeyboardEvent) => {
-      if (state.currentQuestionIndex >= 0 && !state.isFinished) {
-        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.ctrlKey && e.key === 'u')) {
-          e.preventDefault();
-          return;
-        }
-        const forbiddenKeys = ['c', 'v', 'x', 'a', 'p', 's'];
-        if ((e.ctrlKey || e.metaKey) && forbiddenKeys.includes(e.key.toLowerCase())) {
-          e.preventDefault();
-          return;
-        }
-      }
-    };
-
-    const preventContextMenu = (e: MouseEvent) => {
-      if (state.currentQuestionIndex >= 0 && !state.isFinished) {
+      
+      if (e.key === 'F12' || (isCmdOrCtrl && e.shiftKey && e.key.toLowerCase() === 'i')) {
         e.preventDefault();
+        triggerSecurityAlert();
       }
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('keydown', preventDefaultShortcuts, true);
-    window.addEventListener('contextmenu', preventContextMenu);
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      triggerSecurityAlert();
+    };
+
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      triggerSecurityAlert();
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('paste', handlePaste);
+    window.addEventListener('copy', handleCopy);
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('keydown', preventDefaultShortcuts, true);
-      window.removeEventListener('contextmenu', preventContextMenu);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('paste', handlePaste);
+      window.removeEventListener('copy', handleCopy);
     };
   }, [state.currentQuestionIndex, state.isFinished]);
 
   useEffect(() => {
-    setState(prev => ({
-      ...prev,
-      questions: shuffleArray(RAW_QUESTIONS)
-    }));
-  }, []);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('exam-theme', theme);
+  }, [theme]);
 
-  const requestFullscreen = async () => {
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+
+  const fetchHint = async () => {
+    if (hintLoading) return;
+    const currentQ = state.questions[state.currentQuestionIndex];
+    if (state.hintsUsed[currentQ.id]) return;
+
+    setHintLoading(true);
     try {
-      const element = document.documentElement;
-      if (element.requestFullscreen) {
-        await element.requestFullscreen();
-      }
-    } catch (err) {
-      console.error("Fullscreen error:", err);
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `أنت معلم لغة بايثون للصف السابع. قدم تلميحاً بسيطاً جداً ومشجعاً للسؤال التالي دون كشف الإجابة. 
+        السؤال: ${currentQ.title}
+        التعليمות: ${currentQ.instruction}
+        الكود/المحتوى: ${currentQ.content || 'لا يوجد كود'}
+        أجب باللغة العربية فقط وبشكل مختصر جداً (جملة أو جملتين فقط).`,
+      });
+      
+      const hintText = response.text || "فكر في نوع المتغير أو في العمليات الحسابية الأساسية.";
+      setState(prev => ({
+        ...prev,
+        hintsUsed: { ...prev.hintsUsed, [currentQ.id]: hintText }
+      }));
+    } catch (error) {
+      console.error("Hint error:", error);
+    } finally {
+      setHintLoading(false);
     }
   };
+
+  const generateAIFeedback = async (answers: any, questions: Question[]) => {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `بصفتك معلم بايثون خبير، قم بتحليل نتائج الطالب التالية وقدم مراجعة شخصية مشجعة باللغة العربية.
+      الأسئلة والإجابات:
+      ${questions.map(q => `سؤال: ${q.title}, إجابة الطالب: ${answers[q.id] || 'لم يجب'}, الإجابة الصحيحة: ${q.correctAnswer}`).join('\n')}
+      قم بتحديد نقاط القوة ونقاط الضعف، واستخدم نبرة إيجابية ملهمة. (بحد أقصى 150 كلمة).`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+      return response.text || "أحسنت في محاولتك! استمر في التدرب على بايثون.";
+    } catch (e) {
+      return "تم إكمال الامتحان بنجاح. فخورون بجهودك!";
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isNowFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(isNowFullscreen);
+      if (!isNowFullscreen && state.currentQuestionIndex >= 0 && !state.isFinished) {
+        setState(prev => {
+          const newExits = prev.fullscreenExits + 1;
+          const isLocked = newExits >= MAX_STRIKES;
+          return { ...prev, fullscreenExits: newExits, isLocked };
+        });
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && state.currentQuestionIndex >= 0 && !state.isFinished) {
+        setState(prev => ({ ...prev, focusLosses: prev.focusLosses + 1 }));
+        setIsWindowFocused(false);
+      } else {
+        setIsWindowFocused(true);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [state.currentQuestionIndex, state.isFinished]);
+
+  useEffect(() => {
+    if (state.isLocked && !state.isFinished) {
+      submitExam(true);
+    }
+  }, [state.isLocked]);
 
   const submitExam = useCallback(async (isAuto = false) => {
     if (isSubmitting) return;
@@ -121,76 +203,68 @@ const App: React.FC = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
+
+    const aiReview = await generateAIFeedback(state.answers, state.questions);
     
-    const headers = [
-      "اسم الطالب", "الصف", "رقم الهوية", 
-      ...RAW_QUESTIONS.map(q => q.title), 
-      "وقت التسليم", "نوع التسليم", "محاولات الخروج من المس SCREEN"
-    ];
-
-    const orderedAnswers = RAW_QUESTIONS.map(q => {
-      const ans = state.answers[q.id];
-      if (Array.isArray(ans)) return ans.join(', ');
-      return ans || 'لم تتم الإجابة';
-    });
-
-    const securityNote = state.fullscreenExits > 0 
-      ? `تنبيه: حاول الطالب الخروج من وضع ملء الشاشة ${state.fullscreenExits} مرات` 
-      : 'نظيف - التزم بالتعليمات';
-
-    const rowData = [
-      state.studentInfo?.name || '',
-      state.studentInfo?.class || '',
-      state.studentInfo?.studentId || '',
-      ...orderedAnswers,
-      new Date().toLocaleString('ar-EG'),
-      isAuto ? 'تلقائي' : 'يدوي',
-      securityNote
-    ];
+    const headers = ["الاسم", "الصف", "رقم الهوية", "חתימת אבטחה", ...state.questions.map(q => q.title), "וقت التسليم", "AI Feedback"];
+    const orderedAnswers = state.questions.map(q => state.answers[q.id] || 'لم تتم الإجابة');
+    const rowData = [state.studentInfo?.name, state.studentInfo?.class, state.studentInfo?.studentId, state.examSignature, ...orderedAnswers, new Date().toLocaleString('ar-EG'), aiReview];
 
     try {
       await saveToMockSheet({ headers, rowData });
-      setState(prev => ({ ...prev, isFinished: true }));
+      setState(prev => ({ ...prev, isFinished: true, endTime: Date.now(), aiFeedback: aiReview }));
       setAutoSubmitted(isAuto);
     } catch (error) {
-      console.error('Submission failed:', error);
-      alert('خطأ في الإرسال. تم حفظ إجاباتك محلياً.');
-      setState(prev => ({ ...prev, isFinished: true }));
+      setState(prev => ({ ...prev, isFinished: true, endTime: Date.now(), aiFeedback: aiReview }));
     } finally {
       setIsSubmitting(false);
     }
-  }, [state.studentInfo, state.answers, state.fullscreenExits, isSubmitting]);
+  }, [state.studentInfo, state.answers, state.questions, state.examSignature, isSubmitting]);
 
   useEffect(() => {
     let interval: number;
-    if (state.currentQuestionIndex >= 0 && !state.isFinished && state.timeLeft > 0) {
+    if (state.currentQuestionIndex >= 0 && !state.isFinished && state.timeLeft > 0 && !state.isLocked) {
       interval = window.setInterval(() => {
-        setState(prev => {
-          if (prev.timeLeft <= 1) {
-            clearInterval(interval);
-            return { ...prev, timeLeft: 0 };
-          }
-          return { ...prev, timeLeft: prev.timeLeft - 1 };
-        });
+        setState(prev => ({ ...prev, timeLeft: Math.max(0, prev.timeLeft - 1) }));
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [state.currentQuestionIndex, state.isFinished, state.timeLeft]);
+  }, [state.currentQuestionIndex, state.isFinished, state.isLocked]);
 
   useEffect(() => {
     if (state.timeLeft === 0 && !state.isFinished && state.currentQuestionIndex >= 0) {
       submitExam(true);
     }
-  }, [state.timeLeft, state.isFinished, state.currentQuestionIndex, submitExam]);
+  }, [state.timeLeft, submitExam]);
 
   const handleStart = async (info: StudentInfo) => {
     await requestFullscreen();
+    // Shuffling + Dynamic Randomization
+    const shuffledRaw = shuffleArray(RAW_QUESTIONS);
+    const materialized = shuffledRaw.map(q => {
+      const mat = materializeQuestion(q);
+      if (mat.options) {
+        mat.options = shuffleArray(mat.options);
+      }
+      return mat;
+    });
+
+    const signature = generateExamSignature(info.studentId, materialized);
+
     setState(prev => ({
       ...prev,
       studentInfo: info,
+      questions: materialized,
       currentQuestionIndex: 0,
-      startTime: Date.now()
+      startTime: Date.now(),
+      examSignature: signature
     }));
+  };
+
+  const requestFullscreen = async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (err) {}
   };
 
   const handleAnswerChange = (val: string | string[]) => {
@@ -205,19 +279,15 @@ const App: React.FC = () => {
   const nextQuestion = () => {
     const currentQuestion = state.questions[state.currentQuestionIndex];
     const currentAnswer = state.answers[currentQuestion.id];
-    const isAnswered = Array.isArray(currentAnswer) ? currentAnswer.length > 0 : !!(currentAnswer && currentAnswer.toString().trim());
+    const isAnswered = !!(Array.isArray(currentAnswer) ? currentAnswer.length : (currentAnswer && currentAnswer.toString().trim()));
     
     if (!isAnswered) {
       setShowValidationError(true);
       return;
     }
 
-    setShowValidationError(false);
     if (state.currentQuestionIndex < state.questions.length - 1) {
-      setState(prev => ({
-        ...prev,
-        currentQuestionIndex: prev.currentQuestionIndex + 1
-      }));
+      setState(prev => ({ ...prev, currentQuestionIndex: prev.currentQuestionIndex + 1 }));
     } else {
       submitExam(false);
     }
@@ -227,70 +297,88 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (showLanding) return <LandingPage onEnter={() => setShowLanding(false)} />;
-    if (state.isFinished) return <SummaryPage info={state.studentInfo} questions={RAW_QUESTIONS} answers={state.answers} autoSubmitted={autoSubmitted} />;
+    if (state.isFinished) return <SummaryPage state={state} questions={state.questions} autoSubmitted={autoSubmitted} />;
     if (state.currentQuestionIndex === -1) return <StartPage onStart={handleStart} />;
+    if (isExamInProgress && !isFullscreen && !state.isLocked) return <FullscreenLock onReturn={requestFullscreen} />;
 
-    if (isExamInProgress && !isFullscreen) {
-      return <FullscreenLock onReturn={requestFullscreen} />;
-    }
+    if (state.isLocked) return (
+      <div className="max-w-xl mx-auto mt-20 p-12 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border-4 border-rose-500 text-center animate-fadeIn">
+        <h2 className="text-3xl font-black text-rose-600 mb-4">تم قفل الامتحان!</h2>
+        <p className="text-slate-600 dark:text-slate-300 mb-8 font-bold">بسبب محاولات الخروج المتكررة من وضع الأمان، تم إنهاء الامتحان وحفظ النتائج الحالية.</p>
+      </div>
+    );
 
     const currentQuestion = state.questions[state.currentQuestionIndex];
     const progress = ((state.currentQuestionIndex + 1) / state.questions.length) * 100;
-    const currentAnswer = state.answers[currentQuestion.id];
-    const isAnswered = Array.isArray(currentAnswer) ? currentAnswer.length > 0 : !!(currentAnswer && currentAnswer.toString().trim());
 
     return (
-      <div className="max-w-3xl mx-auto px-4 pb-32 select-none" onCopy={(e) => e.preventDefault()} onPaste={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}>
-        <div className="text-center mb-8">
-          <p className="text-slate-500 font-bold text-lg">بالتوفيق، {state.studentInfo?.name}! 💪</p>
+      <div className={`max-w-3xl mx-auto px-4 pb-32 select-none relative transition-all duration-300 ${!isWindowFocused ? 'blur-xl grayscale' : ''}`}>
+        <Strikes current={state.fullscreenExits} max={MAX_STRIKES} />
+        
+        <div className="relative z-10">
+          <div className="mb-10 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+            <div className="flex justify-between items-center mb-3 text-slate-700 dark:text-slate-300 font-black">
+              <span>السؤال {state.currentQuestionIndex + 1} من {state.questions.length}</span>
+              <span className="text-indigo-600 dark:text-indigo-400">{Math.round(progress)}% مكتمل</span>
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-4 overflow-hidden">
+              <div className="bg-indigo-600 h-4 transition-all duration-1000" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+
+          <QuestionCard 
+            question={currentQuestion} 
+            answer={state.answers[currentQuestion.id] || ''} 
+            onChange={handleAnswerChange}
+            hint={state.hintsUsed[currentQuestion.id]}
+            onGetHint={fetchHint}
+            hintLoading={hintLoading}
+          />
+
+          {showValidationError && (
+            <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-950/30 border-2 border-rose-200 rounded-xl text-rose-700 font-black text-center animate-bounce">
+              يجب الإجابة على السؤال قبل المتابعة.
+            </div>
+          )}
         </div>
 
-        <div className="mb-10 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex justify-between items-center mb-3 text-slate-700 font-black">
-            <span className="bg-slate-100 px-3 py-1 rounded-lg">سؤال {state.currentQuestionIndex + 1} من {state.questions.length}</span>
-            <span className="text-indigo-600">{Math.round(progress)}% مكتمل</span>
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-4 shadow-inner overflow-hidden border border-slate-200">
-            <div className="bg-indigo-600 h-4 rounded-full transition-all duration-1000 ease-out shadow-lg" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-
-        {currentQuestion && (
-          <QuestionCard question={currentQuestion} answer={state.answers[currentQuestion.id] || ''} onChange={handleAnswerChange} />
-        )}
-
-        {showValidationError && (
-          <div className="mt-4 p-4 bg-rose-50 border-2 border-rose-200 rounded-xl flex items-center gap-3 animate-bounce">
-            <p className="text-rose-700 font-black">يجب حل السؤال الحالي قبل الانتقال للسؤال التالي.</p>
-          </div>
-        )}
-
-        <div className="fixed bottom-0 right-0 left-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 p-5 flex justify-center z-40 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-          <div className="max-w-3xl w-full flex flex-col sm:flex-row justify-between items-center gap-4 px-4">
-            <p className="text-slate-400 text-sm font-bold">* ימנע الخروج من وضع ملء الشاشة</p>
-            <button
-              onClick={nextQuestion}
-              disabled={isSubmitting}
-              className={`px-16 py-5 rounded-2xl font-black text-xl text-white shadow-2xl transition-all relative overflow-hidden group ${isSubmitting ? 'bg-slate-300' : !isAnswered ? 'bg-indigo-400' : 'bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-1 active:scale-95'}`}
-            >
-              <span className="relative z-10">
-                {isSubmitting ? 'جاري الإرسال...' : (state.currentQuestionIndex === state.questions.length - 1 ? 'تسليم وإنهاء' : 'السؤال التالي ←')}
-              </span>
+        <div className="fixed bottom-0 right-0 left-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 p-5 flex justify-center z-[110]">
+          <div className="max-w-3xl w-full flex justify-between items-center gap-4 px-4">
+             <button onClick={nextQuestion} disabled={isSubmitting} className="w-full sm:w-auto px-16 py-5 rounded-2xl font-black text-xl text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl transition-all active:scale-95">
+              {isSubmitting ? 'جاري الإرسال...' : (state.currentQuestionIndex === state.questions.length - 1 ? 'تسليم نهائي' : 'السؤال التالي ←')}
+            </button>
+            <button onClick={() => setIsScratchpadOpen(prev => !prev)} className="px-6 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold border">
+              {isScratchpadOpen ? 'إغلاق المسودة' : 'مسودة الملاحظات 📝'}
             </button>
           </div>
         </div>
+        
+        {isScratchpadOpen && <Scratchpad />}
+        
+        {showSecurityAlert && (
+          <div className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-rose-600 text-white px-8 py-4 rounded-2xl shadow-2xl z-[200] font-black text-lg animate-slideUp flex items-center gap-3 border-2 border-rose-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            تنبيه: النسخ واللصق والنقر الأيمن ممنوع تماماً!
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 transition-all duration-500 select-none ${isExamInProgress ? 'pt-24' : 'pt-8'}`}>
+    <div className={`min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-500 ${isExamInProgress ? 'pt-24' : 'pt-8'}`}>
+      {!isExamInProgress && !state.isFinished && (
+        <button onClick={toggleTheme} className="fixed top-6 left-6 z-[120] p-3 rounded-full bg-white dark:bg-slate-800 shadow-lg border">
+          {theme === 'light' ? '🌙' : '☀️'}
+        </button>
+      )}
+
       {isExamInProgress && isFullscreen && <Timer timeLeft={state.timeLeft} theme={EXAM_TIMER_THEME} />}
-      {!showLanding && (isExamInProgress && isFullscreen || state.isFinished || state.currentQuestionIndex === -1) && (
-        <header className="text-center mb-8 px-4">
-          <h1 className="text-4xl sm:text-5xl font-black text-indigo-950 drop-shadow-sm tracking-tight">
-            امتحان <span className="text-indigo-600 underline decoration-indigo-200 underline-offset-8">بايثون</span> النهائي
-          </h1>
+      {!showLanding && (
+        <header className="text-center mb-8 px-4 relative z-10">
+          <h1 className="text-4xl sm:text-5xl font-black text-indigo-950 dark:text-white">امتحان بايثون</h1>
         </header>
       )}
       {renderContent()}
