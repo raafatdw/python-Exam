@@ -123,14 +123,14 @@ const App: React.FC = () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `أنت معلم لغة بايثون للصف السابع. قدم تلميحاً بسيطاً جداً ومشجعاً للسؤال التالي دون كشف الإجابة. 
+        contents: `أنت معلم لغة بايثون. قدم تلميحاً بسيطاً جداً ومشجعاً للسؤال التالي دون كشف الإجابة. 
         السؤال: ${currentQ.title}
-        التعليمות: ${currentQ.instruction}
+        التعليمات: ${currentQ.instruction}
         الكود/المحتوى: ${currentQ.content || 'لا يوجد كود'}
-        أجب باللغة العربية فقط وبشكل مختصر جداً (جملة أو جملتين فقط).`,
+        أجب باللغة العربية فقط وبشكل مختصر جداً.`,
       });
       
-      const hintText = response.text || "فكر في نوع المتغير أو في العمليات الحسابية الأساسية.";
+      const hintText = response.text || "فكر في المنطق البرمجي الأساسي.";
       setState(prev => ({
         ...prev,
         hintsUsed: { ...prev.hintsUsed, [currentQ.id]: hintText }
@@ -154,7 +154,7 @@ const App: React.FC = () => {
         model: 'gemini-3-flash-preview',
         contents: prompt
       });
-      return response.text || "أحسنت في محاولتك! استمر في التدرب على بايثون.";
+      return response.text || "أحسنت في محاولتك! استمر في التعلم والتطور.";
     } catch (e) {
       return "تم إكمال الامتحان بنجاح. فخورون بجهودك!";
     }
@@ -206,7 +206,7 @@ const App: React.FC = () => {
 
     const aiReview = await generateAIFeedback(state.answers, state.questions);
     
-    const headers = ["الاسم", "الصف", "رقم الهوية", "חתימת אבטחה", ...state.questions.map(q => q.title), "וقت التسليم", "AI Feedback"];
+    const headers = ["الاسم", "الصف", "رقم الهوية", "حساب الأمان", ...state.questions.map(q => q.title), "وقت التسليم", "AI Feedback"];
     const orderedAnswers = state.questions.map(q => state.answers[q.id] || 'لم تتم الإجابة');
     const rowData = [state.studentInfo?.name, state.studentInfo?.class, state.studentInfo?.studentId, state.examSignature, ...orderedAnswers, new Date().toLocaleString('ar-EG'), aiReview];
 
@@ -239,7 +239,6 @@ const App: React.FC = () => {
 
   const handleStart = async (info: StudentInfo) => {
     await requestFullscreen();
-    // Shuffling + Dynamic Randomization
     const shuffledRaw = shuffleArray(RAW_QUESTIONS);
     const materialized = shuffledRaw.map(q => {
       const mat = materializeQuestion(q);
@@ -304,7 +303,7 @@ const App: React.FC = () => {
     if (state.isLocked) return (
       <div className="max-w-xl mx-auto mt-20 p-12 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border-4 border-rose-500 text-center animate-fadeIn">
         <h2 className="text-3xl font-black text-rose-600 mb-4">تم قفل الامتحان!</h2>
-        <p className="text-slate-600 dark:text-slate-300 mb-8 font-bold">بسبب محاولات الخروج المتكررة من وضع الأمان، تم إنهاء الامتحان وحفظ النتائج الحالية.</p>
+        <p className="text-slate-600 dark:text-slate-300 mb-8 font-bold">تم إنهاء الامتحان وحفظ النتائج الحالية بسبب قيود الأمان.</p>
       </div>
     );
 
@@ -337,7 +336,7 @@ const App: React.FC = () => {
 
           {showValidationError && (
             <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-950/30 border-2 border-rose-200 rounded-xl text-rose-700 font-black text-center animate-bounce">
-              يجب الإجابة على السؤال قبل المتابعة.
+              يرجى الإجابة على السؤال للمتابعة.
             </div>
           )}
         </div>
@@ -354,15 +353,6 @@ const App: React.FC = () => {
         </div>
         
         {isScratchpadOpen && <Scratchpad />}
-        
-        {showSecurityAlert && (
-          <div className="fixed bottom-32 left-1/2 -translate-x-1/2 bg-rose-600 text-white px-8 py-4 rounded-2xl shadow-2xl z-[200] font-black text-lg animate-slideUp flex items-center gap-3 border-2 border-rose-400">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            تنبيه: النسخ واللصق والنقر الأيمن ممنوع تماماً!
-          </div>
-        )}
       </div>
     );
   };

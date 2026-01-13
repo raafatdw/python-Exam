@@ -16,7 +16,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
             </svg>
           </div>
           <h1 className="text-5xl font-black text-indigo-950 dark:text-white mb-4 leading-tight">امتحان بايثون</h1>
-          <h2 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-8">للصف السابع</h2>
+          <h2 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-8">للصف الثامن</h2>
           <button onClick={onEnter} className="group relative inline-flex items-center justify-center px-12 py-5 font-black text-white transition-all duration-200 bg-indigo-600 rounded-2xl hover:bg-indigo-700 shadow-xl active:scale-95">
             دخول الامتحان
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-3 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">

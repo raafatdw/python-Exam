@@ -16,7 +16,6 @@ export const formatTime = (seconds: number): string => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
-// Generates a unique signature for the exam session to prevent plagiarism
 export const generateExamSignature = (studentId: string, questions: Question[]): string => {
   const base = `${studentId}-${questions.map(q => q.correctAnswer).join('|')}`;
   let hash = 0;
@@ -28,44 +27,31 @@ export const generateExamSignature = (studentId: string, questions: Question[]):
   return Math.abs(hash).toString(36).toUpperCase();
 };
 
-// Randomizes a single question based on dynamic rules
 export const materializeQuestion = (q: Question): Question => {
   if (!q.isDynamic) return q;
 
   const newQ = { ...q, dynamicParams: {} as Record<string, any> };
   
-  if (q.id === '1a' || q.id === '1b') {
-    const names = ['Alice', 'Bob', 'Charlie', 'Dana', 'Elias', 'Fadi'];
-    const selectedName = names[Math.floor(Math.random() * names.length)];
-    const selectedAge = Math.floor(Math.random() * (18 - 12 + 1)) + 12;
-
-    if (q.id === '1a') {
-      newQ.instruction = `أدخل قيمة للمتغير name بحيث يحتوي على الاسم "${selectedName}"`;
-      newQ.correctAnswer = `"${selectedName}"`;
-      newQ.dynamicParams = { name: selectedName };
-    } else {
-      newQ.instruction = `أدخل قيمة للمتغير age بحيث يحتوي على الرقم ${selectedAge}`;
-      newQ.correctAnswer = selectedAge.toString();
-      newQ.dynamicParams = { age: selectedAge };
-    }
-  }
-
-  if (q.id === '2-snip1') {
-    const n1 = Math.floor(Math.random() * 10) + 1;
-    const n2 = Math.floor(Math.random() * 5) + 1;
-    const offset = Math.floor(Math.random() * 3) + 1;
-    const result = n1 + n2 - offset;
-
-    newQ.content = `num1 = ${n1}\nnum2 = ${n2}\nnum1 = num1 + num2 - ${offset}\nprint(num1)`;
+  // Basic Randomization Logic for General Python
+  if (q.id === 'q1') {
+    const a = Math.floor(Math.random() * 20) + 10;
+    const b = [2, 3, 5][Math.floor(Math.random() * 3)];
+    const result = Math.floor(a / b);
+    newQ.content = `a = ${a}\nb = ${b}\nx = a // b\nprint(x)`;
     newQ.correctAnswer = result.toString();
-    
-    // Generate new options based on the dynamic result
     const options = new Set([result.toString()]);
     while(options.size < 4) {
-      options.add((result + Math.floor(Math.random() * 5) - 2).toString());
+      options.add((result + Math.floor(Math.random() * 10) - 5).toString());
     }
     newQ.options = shuffleArray(Array.from(options));
-    newQ.dynamicParams = { n1, n2, offset };
+    newQ.dynamicParams = { a, b };
+  }
+
+  if (q.id === 'q3') {
+    const limit = Math.floor(Math.random() * 5) + 3; // 3-7
+    newQ.content = `for i in range(______):\n    print(i)`;
+    newQ.correctAnswer = limit.toString();
+    newQ.dynamicParams = { limit };
   }
 
   return newQ;
@@ -92,7 +78,7 @@ export const saveToMockSheet = async (data: { headers: string[], rowData: any[] 
 export const downloadAsCSV = (state: any, allQuestions: Question[]) => {
   const { studentInfo, answers, examSignature } = state;
   let csvContent = "\uFEFF"; 
-  const headers = ["الاسم", "الصف", "رقم الهوية", "حساب الأمان", ...allQuestions.map(q => `${q.title} (Params)`), ...allQuestions.map(q => q.title), "وقت التسليم"];
+  const headers = ["الاسم", "الصف", "رقم الهوية", "חתימת אבטחה", ...allQuestions.map(q => `${q.title} (Params)`), ...allQuestions.map(q => q.title), "وقت التسليم"];
   csvContent += headers.join(",") + "\n";
   
   const row = [

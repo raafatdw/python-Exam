@@ -3,75 +3,67 @@ import { Question, QuestionType } from './types';
 
 export const RAW_QUESTIONS: Question[] = [
   {
-    id: '1a',
-    isDynamic: true,
-    type: QuestionType.FILL_IN_BLANKS,
-    title: 'تمرين 1 - أ',
-    instruction: 'أدخل قيمة للمتغير name بحيث يحتوي على الاسم "Bob"',
-    content: 'name = ______',
-    placeholder: 'اكتب القيمة هنا',
-    points: 5,
-    correctAnswer: '"Bob"'
-  },
-  {
-    id: '1b',
-    isDynamic: true,
-    type: QuestionType.FILL_IN_BLANKS,
-    title: 'تمرين 1 - ב',
-    instruction: 'أدخل قيمة للمتغير age بحيث يحتوي على الرقم 14',
-    content: 'age = ______',
-    placeholder: 'اكتب القيمة هنا',
-    points: 5,
-    correctAnswer: '14'
-  },
-  {
-    id: '1c1',
-    type: QuestionType.TRUE_FALSE,
-    title: 'تمرين 1 - ج (1)',
-    instruction: 'هل المتغير my_birth_year هو من نوع int؟',
-    content: 'my_birth_year = 2006\nprint(type(my_birth_year))',
-    options: ['صح', 'خطأ'],
-    points: 5,
-    correctAnswer: 'صح'
-  },
-  {
-    id: '2d',
-    type: QuestionType.MULTIPLE_CHOICE,
-    title: 'تمرين 2 - د',
-    instruction: 'اختر الكود الصحيح لتعريف متغير للصف الثامن (8):',
-    options: ['class_num = 1', 'class_num = 2', 'class_num = 8', 'class_num = 3'],
-    points: 10,
-    correctAnswer: 'class_num = 8'
-  },
-  {
-    id: '2-snip1',
+    id: 'q1',
     isDynamic: true,
     type: QuestionType.CODE_OUTPUT,
-    title: 'تمرين 2 - حسابات',
-    instruction: 'ما هي مخرجات الكود التالي؟',
-    content: 'num1 = 4\nnum2 = 2\nnum1 = num1 + num2 - 1\nprint(num1)',
-    options: ['8', '5', '6', '4'],
+    title: 'تمرين 1: المتغيرات',
+    instruction: 'ما هي نتيجة طباعة المتغير x؟',
+    content: 'a = 15\nb = 3\nx = a // b\nprint(x)',
+    options: ['5', '5.0', '18', '45'],
     points: 10,
     correctAnswer: '5'
   },
   {
-    id: '3-vars',
-    type: QuestionType.FILL_IN_BLANKS,
-    title: 'تمرين 3 - إدخال',
-    instruction: 'أكمل الكود لطباعة الطول:',
-    content: 'height = 170\nprint("My height is ", ________)',
-    placeholder: 'اسم المتغير',
-    points: 10,
-    correctAnswer: 'height'
+    id: 'q2',
+    isDynamic: true,
+    type: QuestionType.CODE_OUTPUT,
+    title: 'تمرين 2: الشروط',
+    instruction: 'ماذا سيطبع الكود التالي؟',
+    content: 'x = 10\nif x % 2 == 0:\n    print("Even")\nelse:\n    print("Odd")',
+    options: ['Even', 'Odd', 'None', 'Error'],
+    points: 15,
+    correctAnswer: 'Even'
   },
   {
-    id: '8-mult',
-    type: QuestionType.CODE_OUTPUT,
-    title: 'تمرين 8 - ضرب النصوص',
-    instruction: 'ما هي المخرجات؟',
-    content: 'text = "Love"\nprint(text * 3)',
-    options: ['LoveLoveLove', 'Love 3', 'Love*3', 'Error'],
+    id: 'q3',
+    isDynamic: true,
+    type: QuestionType.FILL_IN_BLANKS,
+    title: 'تمرين 3: الحلقات',
+    instruction: 'أكمل الكود لطباعة الأرقام من 0 إلى 2:',
+    content: 'for i in range(______):\n    print(i)',
+    placeholder: 'أدخل الرقم هنا',
+    points: 15,
+    correctAnswer: '3'
+  },
+  {
+    id: 'q4',
+    type: QuestionType.TRUE_FALSE,
+    title: 'تمرين 4: القوائم',
+    instruction: 'هل القائمة التالية تحتوي على 3 عناصر؟',
+    content: 'my_list = [1, [2, 3], 4]',
+    options: ['صح', 'خطأ'],
     points: 10,
-    correctAnswer: 'LoveLoveLove'
+    correctAnswer: 'صح'
+  },
+  {
+    id: 'q5',
+    isDynamic: true,
+    type: QuestionType.CODE_OUTPUT,
+    title: 'تمرين 5: النصوص',
+    instruction: 'ما هي نتيجة الكود التالي؟',
+    content: 's = "Python"\nprint(s[1:4])',
+    options: ['Pyth', 'yth', 'ytho', 'Pyt'],
+    points: 20,
+    correctAnswer: 'yth'
+  },
+  {
+    id: 'q6',
+    type: QuestionType.FILL_IN_BLANKS,
+    title: 'تمرين 6: الدوال',
+    instruction: 'أكمل الكلمة الناقصة لتعريف الدالة:',
+    content: '______ my_function():\n    return True',
+    placeholder: 'الكلمة المفتاحية',
+    points: 15,
+    correctAnswer: 'def'
   }
 ];

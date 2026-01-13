@@ -1,5 +1,5 @@
 {
-  "name": "מערכת מבחני פייתון - כיתה ז",
-  "description": "An interactive Python programming exam platform for 7th grade students with timed sessions, randomized questions, and automatic submission.",
+  "name": "מערכת מבחני פייתون",
+  "description": "An interactive Python programming exam platform with advanced features like variable randomization, security monitoring, and AI analysis.",
   "requestFramePermissions": []
 }
